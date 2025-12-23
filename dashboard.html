@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+<head>
+  <title>Power Monitor</title>
+  <style>
+    :root {
+      --bg: #f6f9fc;
+      --card: #ffffff;
+      --accent: #0ea5e9;
+      --danger: #ef4444;
+      --warn: #f59e0b;
+      --success: #22c55e;
+      --muted: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Inter", "Segoe UI", sans-serif; background: var(--bg); color: #0f172a; }
+    header { background: linear-gradient(120deg, #0ea5e9, #6366f1); color: #fff; padding: 1.5rem 2rem; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+    .wrapper { padding: 1.5rem; max-width: 1180px; margin: 0 auto; }
+    h1 { margin: 0; font-size: 1.5rem; }
+    h2 { margin: 0 0 0.5rem; }
+    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .card { background: var(--card); border-radius: 12px; padding: 1rem 1.25rem; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
+    .pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+    .pill.success { background: #dcfce7; color: #15803d; }
+    .pill.danger { background: #fee2e2; color: #b91c1c; }
+    .pill.warn { background: #fef3c7; color: #b45309; }
+    .stat-label { color: var(--muted); font-size: 0.9rem; }
+    .stat-value { font-size: 2rem; font-weight: 700; margin-top: 0.35rem; }
+    .alert { border-left: 5px solid var(--danger); }
+    .alert.warn { border-left-color: var(--warn); }
+    .alert.success { border-left-color: var(--success); }
+    .progress { height: 12px; border-radius: 8px; background: #e5e7eb; overflow: hidden; }
+    .progress > div { height: 100%; background: linear-gradient(90deg, #22c55e, #0ea5e9); }
+    .relay-row { display: flex; justify-content: space-between; align-items: center; }
+    .toggle { position: relative; width: 74px; height: 32px; display: inline-flex; align-items: center; gap: 6px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #d1d5db; transition: .3s; border-radius: 999px; }
+    .slider:before { position: absolute; content: ""; height: 24px; width: 24px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    input:checked + .slider { background-color: #22c55e; }
+    input:checked + .slider:before { transform: translateX(28px); }
+    .toggle-text { font-weight: 700; font-size: 0.9rem; min-width: 26px; text-align: right; color: #6b7280; }
+    input:checked ~ .toggle-text { color: #16a34a; }
+    .messages div { margin: 0.2rem 0; }
+    .status-note { color: var(--muted); font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Energy Monitor</h1>
+    <div class="status-note">Track it, understand it, reduce it</div>
+  </header>
+
+  <div class="wrapper">
+    {% if status_msg %}
+      <div class="card alert success" style="border-left-color: var(--success);">
+        {{ status_msg }}
+      </div>
+    {% endif %}
+    {% if err_msg %}
+      <div class="card alert">
+        {{ err_msg }}
+      </div>
+    {% endif %}
+
+    <div class="card alert warn" style="border:1px solid #f59e0b;">
+      <strong>⚠ Power Fluctuation Alert!</strong>
+      <div>Please power off your devices immediately. Unusual fluctuation detected. This could damage your appliances.</div>
+    </div>
+
+    <div class="card alert success" style="border:1px solid #22c55e; margin-top:0.6rem;">
+      <strong>✅ Great Job!</strong>
+      <div>You’ve consumed {{ "%.2f"|format(1.43) }} kWh less than yesterday. Keep it up!</div>
+    </div>
+
+    <div class="grid" style="margin-top:0.6rem;">
+      <div class="card">
+        <div class="stat-label">Current Usage</div>
+        <div class="stat-value" style="color:#0ea5e9;">{{ "%.2f"|format(current_kw) }} kW</div>
+        <div class="status-note">Real-time consumption</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">Daily Total</div>
+        <div class="stat-value" style="color:#f59e0b;">{{ "%.2f"|format(daily_kwh) }} kWh</div>
+        <div class="status-note">Today</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">Today's Cost</div>
+        <div class="stat-value" style="color:#22c55e;">₹{{ "%.2f"|format(cost_today) }}</div>
+        <div class="status-note">Estimated for today</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">Monthly Bill Est</div>
+        <div class="stat-value" style="color:#22c55e;">₹{{ "%.2f"|format(cost_month) }}</div>
+        <div class="status-note">Based on current usage</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:0.8rem;">
+      <div class="relay-row" style="align-items:flex-start;">
+        <div>
+          <div style="display:flex;align-items:center;gap:0.6rem;">
+            <h2 style="margin:0;">Power Control</h2>
+            <span class="pill success" id="relayStatePill">
+              {% if d.relay==1 %}ON{% else %}OFF{% endif %}
+            </span>
+          </div>
+          <div class="status-note">Control the flow of electricity to your home</div>
+        </div>
+        <form method="post" action="/relay" id="relayForm" style="display:flex;align-items:center;gap:0.5rem;">
+          <input type="hidden" name="cmd" id="cmdField" value="{{ 1 if d.relay==1 else 0 }}">
+          <label class="toggle">
+            <input type="checkbox" id="relayToggle" {% if d.relay==1 %}checked{% endif %}>
+            <span class="slider"></span>
+            <span class="toggle-text">{% if d.relay==1 %}ON{% else %}OFF{% endif %}</span>
+          </label>
+          <button type="submit" style="padding:0.45rem 0.9rem; border:none; border-radius:8px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer;">Update</button>
+        </form>
+      </div>
+
+      <div style="display:flex; gap:1rem; margin-top:0.9rem;">
+        <div class="card" style="flex:1; background:#f8fafc;">
+          <div class="stat-label">Voltage</div>
+          <div class="stat-value" style="font-size:1.4rem;">{{ "%.0f"|format(d.v | abs) }} V</div>
+        </div>
+        <div class="card" style="flex:1; background:#f8fafc;">
+          <div class="stat-label">Current</div>
+          <div class="stat-value" style="font-size:1.4rem;">{{ "%.2f"|format(d.i | abs) }} A</div>
+        </div>
+        <div class="card" style="flex:1; background:#f8fafc;">
+          <div class="stat-label">Power</div>
+          <div class="stat-value" style="font-size:1.4rem;">{{ "%.2f"|format(d.p | abs) }} W</div>
+        </div>
+      </div>
+
+      <button style="margin-top:0.8rem; width:100%; padding:0.65rem; border:none; border-radius:8px; background:#ef4444; color:#fff; font-weight:700; cursor:pointer;">Emergency Shutdown</button>
+      <div class="card alert warn" style="margin-top:0.6rem; background:#fff7ed;">
+        <strong>⚠ Fluctuation Detected</strong>
+        <div class="status-note">Consider turning off power to protect your devices.</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:1rem;">
+      <h2 style="margin:0 0 0.4rem 0;">Set Consumption Limit</h2>
+      <div class="status-note">Configure your daily energy consumption threshold</div>
+      <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.6rem;">
+        <input type="number" value="20" style="flex:1; padding:0.5rem; border:1px solid #e5e7eb; border-radius:8px;">
+        <button style="padding:0.5rem 0.9rem; border:none; border-radius:8px; background:#0ea5e9; color:#fff; font-weight:600;">Set Limit</button>
+      </div>
+      {% set limit = 20 %}
+      {% set progress = (d.energy_kwh / limit) * 100 %}
+      <div style="margin:0.75rem 0 0.25rem 0; color:var(--muted);">Current Progress</div>
+      <div class="progress"><div style="width: {{ progress if progress < 100 else 100 }}%;"></div></div>
+      <div class="status-note" style="margin-top:0.4rem;">{{ "%.2f"|format(d.energy_kwh) }} / {{ limit }} kWh</div>
+      <div class="pill success" style="margin-top:0.4rem; background:#ecfdf3; color:#15803d; font-size:0.85rem;">You’re well within your daily limit</div>
+    </div>
+
+  </div>
+
+  <script>
+    (function() {
+      const toggle = document.getElementById('relayToggle');
+      const cmdField = document.getElementById('cmdField');
+      if (toggle && cmdField) {
+        toggle.addEventListener('change', () => {
+          cmdField.value = toggle.checked ? 1 : 0;
+          const text = toggle.parentElement.querySelector('.toggle-text');
+          if (text) text.textContent = toggle.checked ? 'ON' : 'OFF';
+          const pill = document.getElementById('relayStatePill');
+          if (pill) pill.textContent = toggle.checked ? 'ON' : 'OFF';
+        });
+      }
+    })();
+
+  </script>
+</body>
+</html>
